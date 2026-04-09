@@ -49,3 +49,32 @@ class TestGet:
     def test_get_missing_config_exit_code(self, runner, tmp_path):
         result = runner.invoke(cli, ["--config", str(tmp_path / "nonexistent.toml"), "get"])
         assert result.exit_code == 2
+
+
+class TestSet:
+    """Test vrzn set command."""
+
+    def test_set_updates_all_files(self, runner, project):
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "--yes", "set", "2.0.0"])
+        assert result.exit_code == 0
+        assert 'version = "2.0.0"' in (project / "pyproject.toml").read_text(encoding="utf-8")
+        assert '__version__ = "2.0.0"' in (project / "src" / "__init__.py").read_text(encoding="utf-8")
+
+    def test_set_normalizes_version(self, runner, project):
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "--yes", "set", "2.0.0-rc1"])
+        assert result.exit_code == 0
+        assert '__version__ = "2.0.0rc1"' in (project / "src" / "__init__.py").read_text(encoding="utf-8")
+
+    def test_set_dry_run_no_changes(self, runner, project):
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "--dry-run", "set", "9.9.9"])
+        assert result.exit_code == 0
+        assert 'version = "1.2.3"' in (project / "pyproject.toml").read_text(encoding="utf-8")
+
+    def test_set_invalid_version(self, runner, project):
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "--yes", "set", "bad"])
+        assert result.exit_code == 1
+
+    def test_set_prompts_without_yes(self, runner, project):
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "set", "2.0.0"], input="n\n")
+        assert result.exit_code == 0
+        assert 'version = "1.2.3"' in (project / "pyproject.toml").read_text(encoding="utf-8")

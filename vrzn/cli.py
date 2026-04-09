@@ -137,6 +137,90 @@ def get(ctx: click.Context):
     sys.exit(1 if mismatches else 0)
 
 
+@cli.command("set")
+@click.argument("version")
+@click.pass_context
+def set_version(ctx: click.Context, version: str):
+    """Set all version numbers to VERSION across all configured files.
+
+    VERSION supports full PEP 440 specification (e.g., 1.0.0, 1.0.0rc1, 1.0.0.post1).
+    Non-normalized forms are accepted and automatically normalized.
+    """
+    vctx: VrznContext = ctx.obj["vrzn"]
+
+    try:
+        ver = parse_version(version)
+    except ValueError:
+        err_console.print(f"[red]Invalid version format: {version}[/red]")
+        err_console.print("  Expected PEP 440 version (e.g., 1.0.0, 1.0.0rc1, 1.0.0.post1)")
+        sys.exit(1)
+
+    locations = vctx.load()
+
+    if not vctx.quiet:
+        console.print()
+        console.print(f"  Setting version to [bold green]{ver.normalized}[/bold green]")
+        console.print()
+
+    if not vctx.dry_run and not vctx.yes:
+        if not click.confirm("  Proceed?"):
+            console.print("\n  [dim]Aborted.[/dim]\n")
+            sys.exit(0)
+        console.print()
+
+    table = _update_all(locations, ver, vctx)
+    if not vctx.quiet:
+        console.print(table)
+        console.print()
+        if vctx.dry_run:
+            console.print("  [yellow]Dry run — no files were modified.[/yellow]")
+        else:
+            console.print(f"  [green]All versions set to {ver.normalized}.[/green]")
+        console.print()
+
+
+def _update_all(locations: list[VersionLocation], ver: Version, vctx: "VrznContext") -> Table:
+    """Update all version locations and return a results table.
+
+    :param locations: List of version locations to update.
+    :param ver: Target version to write.
+    :param vctx: VrznContext with dry_run and project_root.
+    :returns: Rich Table with update results.
+    """
+    table = Table(
+        title="dry run" if vctx.dry_run else "updated files",
+        box=box.ROUNDED,
+        show_lines=False,
+        title_style="bold yellow" if vctx.dry_run else "bold green",
+        header_style="bold",
+    )
+    table.add_column("File", style="blue", max_width=45)
+    table.add_column("Location", style="dim")
+    table.add_column("Current", justify="center")
+    table.add_column("New", justify="center")
+    table.add_column("Result", justify="center")
+
+    for loc in locations:
+        rel_path = _relative_path(loc.file, vctx.project_root)
+        target_str = ver.base if loc.base_only else ver.normalized
+        current = loc.read_version() or "-"
+
+        if not loc.file.exists():
+            table.add_row(rel_path, loc.label, "-", target_str, "[yellow]skipped (not found)[/yellow]")
+            continue
+
+        if vctx.dry_run:
+            table.add_row(rel_path, loc.label, current, target_str, "[cyan]would update[/cyan]")
+        else:
+            ok = loc.write_version(ver)
+            if ok:
+                table.add_row(rel_path, loc.label, current, target_str, "[green]updated[/green]")
+            else:
+                table.add_row(rel_path, loc.label, current, target_str, "[red]pattern not matched[/red]")
+
+    return table
+
+
 def _relative_path(path: Path, root: Path) -> str:
     """Return path relative to root, or absolute if not under root."""
     try:
