@@ -124,4 +124,6 @@ def get_preset(name: str, **params: str) -> Preset | list[Preset]:
             raise ValueError("c-define preset requires a 'prefix' parameter")
         return _make_c_define_presets(prefix)
 
-    return PRESET_REGISTRY[name]
+    preset = PRESET_REGISTRY[name]
+    assert isinstance(preset, Preset)
+    return preset

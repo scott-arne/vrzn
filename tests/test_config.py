@@ -41,6 +41,7 @@ class TestFindConfig:
         (tmp_path / "vrzn.toml").write_text('[[locations]]\nfile = "a.toml"\ntype = "pyproject-version"\n')
         (tmp_path / "vrzn.yaml").write_text("locations:\n  - file: b.toml\n    type: pyproject-version\n")
         result = find_config(start_dir=tmp_path)
+        assert result is not None
         assert result.name == "vrzn.toml"
 
     def test_walks_up_directory(self, tmp_path):
@@ -59,6 +60,7 @@ class TestFindConfig:
         (tmp_path / "vrzn.toml").write_text('[[locations]]\nfile = "a"\ntype = "pyproject-version"\n')
         (tmp_path / "vrzn.json").write_text('{"locations": [{"file": "b", "type": "pyproject-version"}]}')
         result = find_config(start_dir=tmp_path)
+        assert result is not None
         assert result.name == "vrzn.toml"
         captured = capsys.readouterr()
         assert "multiple" in captured.err.lower() or "multiple" in captured.err

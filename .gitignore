@@ -62,3 +62,6 @@ target/
 
 # Mac Stuff
 .DS_Store
+
+# Claude stuff
+docs/superpowers

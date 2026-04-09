@@ -1,6 +1,13 @@
 import re
 import pytest
-from vrzn.presets import get_preset, PRESET_REGISTRY
+from vrzn.presets import get_preset, Preset, PRESET_REGISTRY
+
+
+def _single_preset(name: str) -> Preset:
+    """Get a preset that is expected to be a single Preset, not a list."""
+    result = get_preset(name)
+    assert isinstance(result, Preset)
+    return result
 
 
 # Sample file contents for testing
@@ -77,54 +84,55 @@ class TestPresetExtract:
     """Test that each preset's extract regex finds the version."""
 
     def test_pyproject_version(self):
-        preset = get_preset("pyproject-version")
+        preset = _single_preset("pyproject-version")
         m = re.search(preset.extract, PYPROJECT_TOML, re.MULTILINE)
         assert m and m.group(1) == "1.2.3"
 
     def test_python_dunder(self):
-        preset = get_preset("python-dunder")
+        preset = _single_preset("python-dunder")
         m = re.search(preset.extract, PYTHON_DUNDER, re.MULTILINE)
         assert m and m.group(1) == "1.2.3"
 
     def test_python_version_info(self):
-        preset = get_preset("python-version-info")
+        preset = _single_preset("python-version-info")
         m = re.search(preset.extract, PYTHON_VERSION_INFO, re.MULTILINE)
         assert m and m.group(1) == "1, 2, 3"
 
     def test_cmake_project(self):
-        preset = get_preset("cmake-project")
+        preset = _single_preset("cmake-project")
         m = re.search(preset.extract, CMAKE_CONTENT, re.MULTILINE)
         assert m and m.group(1) == "1.2.3"
 
     def test_c_define(self):
         presets = get_preset("c-define", prefix="MYLIB")
+        assert isinstance(presets, list)
         assert len(presets) == 3
         for p in presets:
             m = re.search(p.extract, C_HEADER, re.MULTILINE)
             assert m is not None
 
     def test_cargo_toml(self):
-        preset = get_preset("cargo-toml")
+        preset = _single_preset("cargo-toml")
         m = re.search(preset.extract, CARGO_TOML, re.MULTILINE)
         assert m and m.group(1) == "1.2.3"
 
     def test_package_json(self):
-        preset = get_preset("package-json")
+        preset = _single_preset("package-json")
         m = re.search(preset.extract, PACKAGE_JSON, re.MULTILINE)
         assert m and m.group(1) == "1.2.3"
 
     def test_maven_pom(self):
-        preset = get_preset("maven-pom")
+        preset = _single_preset("maven-pom")
         m = re.search(preset.extract, MAVEN_POM, re.MULTILINE)
         assert m and m.group(1) == "1.2.3"
 
     def test_gradle_single_quotes(self):
-        preset = get_preset("gradle-version")
+        preset = _single_preset("gradle-version")
         m = re.search(preset.extract, GRADLE_SINGLE, re.MULTILINE)
         assert m and m.group(1) == "1.2.3"
 
     def test_gradle_double_quotes(self):
-        preset = get_preset("gradle-version")
+        preset = _single_preset("gradle-version")
         m = re.search(preset.extract, GRADLE_DOUBLE, re.MULTILINE)
         assert m and m.group(1) == "1.2.3"
 
@@ -133,17 +141,17 @@ class TestPresetReplace:
     """Test that each preset's pattern/replacement correctly updates the version."""
 
     def test_pyproject_version(self):
-        preset = get_preset("pyproject-version")
+        preset = _single_preset("pyproject-version")
         result = re.sub(preset.pattern, preset.replacement.format(version="2.0.0"), PYPROJECT_TOML, flags=re.MULTILINE)
         assert 'version = "2.0.0"' in result
 
     def test_python_dunder(self):
-        preset = get_preset("python-dunder")
+        preset = _single_preset("python-dunder")
         result = re.sub(preset.pattern, preset.replacement.format(version="2.0.0"), PYTHON_DUNDER, flags=re.MULTILINE)
         assert '__version__ = "2.0.0"' in result
 
     def test_cmake_project(self):
-        preset = get_preset("cmake-project")
+        preset = _single_preset("cmake-project")
         result = re.sub(
             preset.pattern,
             preset.replacement.format(major=2, minor=0, patch=0, version="2.0.0", info_tuple="2, 0, 0"),
@@ -153,7 +161,7 @@ class TestPresetReplace:
         assert "VERSION 2.0.0" in result
 
     def test_package_json(self):
-        preset = get_preset("package-json")
+        preset = _single_preset("package-json")
         result = re.sub(preset.pattern, preset.replacement.format(version="2.0.0"), PACKAGE_JSON, flags=re.MULTILINE)
         assert '"version": "2.0.0"' in result
 
@@ -173,7 +181,7 @@ class TestPresetRegistry:
         for name in PRESET_REGISTRY:
             if name == "c-define":
                 continue  # parameterized
-            preset = get_preset(name)
+            preset = _single_preset(name)
             assert preset.pattern
             assert preset.replacement
             assert preset.extract

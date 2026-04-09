@@ -96,9 +96,9 @@ def load_config(config_path: Path) -> dict[str, Any]:
                 return yaml.safe_load(f)
         else:
             raise ConfigError(f"Unsupported config file format: {name}")
-    except (json.JSONDecodeError, Exception) as e:
-        if isinstance(e, ConfigError):
-            raise
+    except ConfigError:
+        raise
+    except (json.JSONDecodeError, ValueError, KeyError, OSError) as e:
         raise ConfigError(f"Failed to parse {config_path}: {e}") from e
 
 

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple, Optional
 
-from vrzn.presets import Preset, get_preset
+from vrzn.presets import get_preset, Preset
 from vrzn.version import Version, parse_version
 
 
@@ -106,6 +106,7 @@ def locations_from_config(config: dict[str, Any], project_root: Path) -> list[Ve
             ))
         elif loc_type == "c-define":
             presets = get_preset("c-define", prefix=entry["prefix"])
+            assert isinstance(presets, list)
             label_override = entry.get("label")
             for p in presets:
                 result.append(VersionLocation(
@@ -118,6 +119,7 @@ def locations_from_config(config: dict[str, Any], project_root: Path) -> list[Ve
                 ))
         else:
             preset = get_preset(loc_type)
+            assert isinstance(preset, Preset)
             result.append(VersionLocation(
                 file=file_path,
                 label=entry.get("label", preset.name),

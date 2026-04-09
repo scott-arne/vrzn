@@ -1,8 +1,6 @@
 """vrzn CLI — version management across project files."""
 
-import sys
 from pathlib import Path
-from typing import Optional
 
 import rich_click as click
 from rich import box
@@ -14,7 +12,7 @@ from vrzn.locations import VersionLocation, check_agreement, locations_from_conf
 from vrzn.version import Version, parse_version
 
 # Rich click configuration
-click.rich_click.USE_RICH_MARKUP = True
+click.rich_click.TEXT_MARKUP = "rich"
 click.rich_click.SHOW_ARGUMENTS = True
 click.rich_click.GROUP_ARGUMENTS_OPTIONS = True
 click.rich_click.STYLE_COMMANDS_TABLE_COLUMN_WIDTH_RATIO = (1, 2)
@@ -26,39 +24,37 @@ err_console = Console(stderr=True)
 class VrznContext:
     """Shared state passed through Click context."""
 
-    def __init__(self, dry_run: bool, yes: bool, quiet: bool, config_path: Optional[Path]):
+    def __init__(self, dry_run: bool, yes: bool, quiet: bool, config_path: Path | None):
         self.dry_run = dry_run
         self.yes = yes
         self.quiet = quiet
         self.config_path = config_path
-        self._locations: Optional[list[VersionLocation]] = None
-        self._project_root: Optional[Path] = None
+        self._locations: list[VersionLocation] | None = None
+        self._project_root: Path | None = None
 
     def load(self) -> list[VersionLocation]:
-        """Load config and return locations. Exits on error."""
+        """Load config and return locations.
+
+        :returns: List of version locations.
+        :raises ConfigError: If config is missing, invalid, or unreadable.
+        """
         if self._locations is not None:
             return self._locations
 
         if self.config_path:
             config_file = self.config_path
             if not config_file.is_file():
-                err_console.print(f"[red]Config file not found: {config_file}[/red]")
-                sys.exit(2)
+                raise ConfigError(f"Config file not found: {config_file}")
         else:
             config_file = find_config()
             if config_file is None:
-                err_console.print("[red]No vrzn config found. Create vrzn.toml or add [tool.vrzn] to pyproject.toml.[/red]")
-                sys.exit(2)
+                raise ConfigError(
+                    "No vrzn config found. Create vrzn.toml or add [tool.vrzn] to pyproject.toml."
+                )
 
         self._project_root = config_file.parent
-
-        try:
-            config = load_config(config_file)
-            validate_config(config)
-        except ConfigError as e:
-            err_console.print(f"[red]Configuration error: {e}[/red]")
-            sys.exit(2)
-
+        config = load_config(config_file)
+        validate_config(config)
         self._locations = locations_from_config(config, self._project_root)
         return self._locations
 
@@ -66,6 +62,7 @@ class VrznContext:
     def project_root(self) -> Path:
         if self._project_root is None:
             self.load()
+            assert self._project_root is not None
         return self._project_root
 
 
@@ -76,10 +73,20 @@ class VrznContext:
 @click.option("--config", "-c", "config_path", type=click.Path(path_type=Path), default=None,
               help="Path to config file (overrides discovery).")
 @click.pass_context
-def cli(ctx: click.Context, dry_run: bool, yes: bool, quiet: bool, config_path: Optional[Path]):
+def cli(ctx: click.Context, dry_run: bool, yes: bool, quiet: bool, config_path: Path | None):
     """Manage version numbers across project files."""
     ctx.ensure_object(dict)
     ctx.obj["vrzn"] = VrznContext(dry_run, yes, quiet, config_path)
+
+
+def _load_or_exit(vctx: VrznContext, ctx: click.Context) -> list[VersionLocation]:
+    """Load locations from config, printing errors and exiting on failure."""
+    try:
+        return vctx.load()
+    except ConfigError as e:
+        err_console.print(f"[red]{e}[/red]")
+        ctx.exit(2)
+        return []  # unreachable, satisfies type checker
 
 
 @cli.command()
@@ -87,13 +94,16 @@ def cli(ctx: click.Context, dry_run: bool, yes: bool, quiet: bool, config_path: 
 def get(ctx: click.Context):
     """Display the current version in all configured files."""
     vctx: VrznContext = ctx.obj["vrzn"]
-    locations = vctx.load()
+    locations = _load_or_exit(vctx, ctx)
+    if not locations:
+        return
     consensus, mismatches = check_agreement(locations)
 
     if vctx.quiet:
         if consensus:
             click.echo(consensus.normalized)
-        sys.exit(1 if mismatches else 0)
+        ctx.exit(1 if mismatches else 0)
+        return
 
     table = Table(
         title="vrzn \u2014 version report",
@@ -134,7 +144,7 @@ def get(ctx: click.Context):
         console.print("  [green]All version numbers are consistent.[/green]")
     console.print()
 
-    sys.exit(1 if mismatches else 0)
+    ctx.exit(1 if mismatches else 0)
 
 
 @cli.command("set")
@@ -153,9 +163,12 @@ def set_version(ctx: click.Context, version: str):
     except ValueError:
         err_console.print(f"[red]Invalid version format: {version}[/red]")
         err_console.print("  Expected PEP 440 version (e.g., 1.0.0, 1.0.0rc1, 1.0.0.post1)")
-        sys.exit(1)
+        ctx.exit(1)
+        return
 
-    locations = vctx.load()
+    locations = _load_or_exit(vctx, ctx)
+    if not locations:
+        return
 
     if not vctx.quiet:
         console.print()
@@ -165,7 +178,7 @@ def set_version(ctx: click.Context, version: str):
     if not vctx.dry_run and not vctx.yes:
         if not click.confirm("  Proceed?"):
             console.print("\n  [dim]Aborted.[/dim]\n")
-            sys.exit(0)
+            return
         console.print()
 
     table = _update_all(locations, ver, vctx)
@@ -230,25 +243,28 @@ _PRE_LABELS = {"alpha": "a", "a": "a", "beta": "b", "b": "b", "rc": "rc"}
 @click.option("--pre", "pre_label", type=click.Choice(["alpha", "a", "beta", "b", "rc"]),
               default=None, help="Start or promote a pre-release with this label.")
 @click.pass_context
-def bump(ctx: click.Context, part: str, pre_label: Optional[str]):
+def bump(ctx: click.Context, part: str, pre_label: str | None):
     """Bump the version number across all configured files.
 
     PART must be one of: major, minor, patch, pre, release.
     Use --pre to enter or promote a pre-release state.
     """
     vctx: VrznContext = ctx.obj["vrzn"]
-    locations = vctx.load()
+    locations = _load_or_exit(vctx, ctx)
+    if not locations:
+        return
     consensus, mismatches = check_agreement(locations)
 
     if consensus is None:
         err_console.print("[red]Could not read any version from configured locations.[/red]")
-        sys.exit(1)
+        ctx.exit(1)
+        return
 
     if mismatches and not vctx.yes and not vctx.dry_run:
         err_console.print(f"[yellow]Warning: {len(mismatches)} location(s) out of sync.[/yellow]")
         if not click.confirm("  Continue with bump from consensus version?"):
             console.print("\n  [dim]Aborted.[/dim]\n")
-            sys.exit(0)
+            return
 
     # Normalize the pre-release label
     normalized_label = _PRE_LABELS[pre_label] if pre_label else None
@@ -266,10 +282,12 @@ def bump(ctx: click.Context, part: str, pre_label: Optional[str]):
             new = consensus.bump_release()
         else:
             err_console.print(f"[red]Unknown part: {part}[/red]")
-            sys.exit(1)
+            ctx.exit(1)
+            return
     except ValueError as e:
         err_console.print(f"[red]{e}[/red]")
-        sys.exit(1)
+        ctx.exit(1)
+        return
 
     if not vctx.quiet:
         console.print()
@@ -282,7 +300,7 @@ def bump(ctx: click.Context, part: str, pre_label: Optional[str]):
     if not vctx.dry_run and not vctx.yes:
         if not click.confirm("  Proceed?"):
             console.print("\n  [dim]Aborted.[/dim]\n")
-            sys.exit(0)
+            return
         console.print()
 
     table = _update_all(locations, new, vctx)
