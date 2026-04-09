@@ -78,3 +78,59 @@ class TestSet:
         result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "set", "2.0.0"], input="n\n")
         assert result.exit_code == 0
         assert 'version = "1.2.3"' in (project / "pyproject.toml").read_text(encoding="utf-8")
+
+
+class TestBump:
+    """Test vrzn bump command."""
+
+    def test_bump_patch(self, runner, project):
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "--yes", "bump", "patch"])
+        assert result.exit_code == 0
+        assert 'version = "1.2.4"' in (project / "pyproject.toml").read_text(encoding="utf-8")
+
+    def test_bump_minor(self, runner, project):
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "--yes", "bump", "minor"])
+        assert result.exit_code == 0
+        assert 'version = "1.3.0"' in (project / "pyproject.toml").read_text(encoding="utf-8")
+
+    def test_bump_major(self, runner, project):
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "--yes", "bump", "major"])
+        assert result.exit_code == 0
+        assert 'version = "2.0.0"' in (project / "pyproject.toml").read_text(encoding="utf-8")
+
+    def test_bump_patch_with_pre(self, runner, project):
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "--yes", "bump", "patch", "--pre", "rc"])
+        assert result.exit_code == 0
+        assert 'version = "1.2.4rc1"' in (project / "pyproject.toml").read_text(encoding="utf-8")
+
+    def test_bump_pre_increments(self, runner, project):
+        (project / "pyproject.toml").write_text('version = "1.0.0rc1"\n', encoding="utf-8")
+        (project / "src" / "__init__.py").write_text('__version__ = "1.0.0rc1"\n', encoding="utf-8")
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "--yes", "bump", "pre"])
+        assert result.exit_code == 0
+        assert 'version = "1.0.0rc2"' in (project / "pyproject.toml").read_text(encoding="utf-8")
+
+    def test_bump_release_finalizes(self, runner, project):
+        (project / "pyproject.toml").write_text('version = "1.0.0rc1"\n', encoding="utf-8")
+        (project / "src" / "__init__.py").write_text('__version__ = "1.0.0rc1"\n', encoding="utf-8")
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "--yes", "bump", "release"])
+        assert result.exit_code == 0
+        assert 'version = "1.0.0"' in (project / "pyproject.toml").read_text(encoding="utf-8")
+
+    def test_bump_pre_no_active_errors(self, runner, project):
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "--yes", "bump", "pre"])
+        assert result.exit_code == 1
+
+    def test_bump_release_already_final_errors(self, runner, project):
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "--yes", "bump", "release"])
+        assert result.exit_code == 1
+
+    def test_bump_dry_run(self, runner, project):
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "--dry-run", "bump", "patch"])
+        assert result.exit_code == 0
+        assert 'version = "1.2.3"' in (project / "pyproject.toml").read_text(encoding="utf-8")
+
+    def test_bump_with_mismatch_warns(self, runner, project):
+        (project / "src" / "__init__.py").write_text('__version__ = "9.9.9"\n', encoding="utf-8")
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "--yes", "bump", "patch"])
+        assert result.exit_code == 0  # proceeds with --yes

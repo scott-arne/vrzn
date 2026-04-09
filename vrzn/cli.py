@@ -221,6 +221,81 @@ def _update_all(locations: list[VersionLocation], ver: Version, vctx: "VrznConte
     return table
 
 
+# Valid pre-release labels for the --pre option
+_PRE_LABELS = {"alpha": "a", "a": "a", "beta": "b", "b": "b", "rc": "rc"}
+
+
+@cli.command()
+@click.argument("part", type=click.Choice(["major", "minor", "patch", "pre", "release"]))
+@click.option("--pre", "pre_label", type=click.Choice(["alpha", "a", "beta", "b", "rc"]),
+              default=None, help="Start or promote a pre-release with this label.")
+@click.pass_context
+def bump(ctx: click.Context, part: str, pre_label: Optional[str]):
+    """Bump the version number across all configured files.
+
+    PART must be one of: major, minor, patch, pre, release.
+    Use --pre to enter or promote a pre-release state.
+    """
+    vctx: VrznContext = ctx.obj["vrzn"]
+    locations = vctx.load()
+    consensus, mismatches = check_agreement(locations)
+
+    if consensus is None:
+        err_console.print("[red]Could not read any version from configured locations.[/red]")
+        sys.exit(1)
+
+    if mismatches and not vctx.yes and not vctx.dry_run:
+        err_console.print(f"[yellow]Warning: {len(mismatches)} location(s) out of sync.[/yellow]")
+        if not click.confirm("  Continue with bump from consensus version?"):
+            console.print("\n  [dim]Aborted.[/dim]\n")
+            sys.exit(0)
+
+    # Normalize the pre-release label
+    normalized_label = _PRE_LABELS[pre_label] if pre_label else None
+
+    try:
+        if part == "major":
+            new = consensus.bump_major(pre_label=normalized_label)
+        elif part == "minor":
+            new = consensus.bump_minor(pre_label=normalized_label)
+        elif part == "patch":
+            new = consensus.bump_patch(pre_label=normalized_label)
+        elif part == "pre":
+            new = consensus.bump_pre(label=normalized_label)
+        elif part == "release":
+            new = consensus.bump_release()
+        else:
+            err_console.print(f"[red]Unknown part: {part}[/red]")
+            sys.exit(1)
+    except ValueError as e:
+        err_console.print(f"[red]{e}[/red]")
+        sys.exit(1)
+
+    if not vctx.quiet:
+        console.print()
+        console.print(
+            f"  Version bump: [bold red]{consensus.normalized}[/bold red] "
+            f"\u2192 [bold green]{new.normalized}[/bold green]"
+        )
+        console.print()
+
+    if not vctx.dry_run and not vctx.yes:
+        if not click.confirm("  Proceed?"):
+            console.print("\n  [dim]Aborted.[/dim]\n")
+            sys.exit(0)
+        console.print()
+
+    table = _update_all(locations, new, vctx)
+    if not vctx.quiet:
+        console.print(table)
+        console.print()
+        if vctx.dry_run:
+            console.print("  [yellow]Dry run \u2014 no files were modified.[/yellow]")
+        else:
+            console.print(f"  [green]Version bumped to {new.normalized}.[/green]")
+        console.print()
+
+
 def _relative_path(path: Path, root: Path) -> str:
     """Return path relative to root, or absolute if not under root."""
     try:
