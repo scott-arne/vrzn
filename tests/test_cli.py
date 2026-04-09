@@ -134,3 +134,58 @@ class TestBump:
         (project / "src" / "__init__.py").write_text('__version__ = "9.9.9"\n', encoding="utf-8")
         result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "--yes", "bump", "patch"])
         assert result.exit_code == 0  # proceeds with --yes
+
+
+@pytest.fixture
+def project_with_c_define(tmp_path):
+    """Create a project with c-define locations alongside standard locations."""
+    config = tmp_path / "vrzn.toml"
+    config.write_text(
+        '[[locations]]\nfile = "pyproject.toml"\ntype = "pyproject-version"\n\n'
+        '[[locations]]\nfile = "mylib.h"\ntype = "c-define"\nprefix = "MYLIB"\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "pyproject.toml").write_text('version = "1.2.3"\n', encoding="utf-8")
+    (tmp_path / "mylib.h").write_text(
+        "#define MYLIB_VERSION_MAJOR 1\n"
+        "#define MYLIB_VERSION_MINOR 2\n"
+        "#define MYLIB_VERSION_PATCH 3\n",
+        encoding="utf-8",
+    )
+    return tmp_path
+
+
+class TestCDefineIntegration:
+    """Test that c-define component locations display correctly."""
+
+    def test_get_shows_ok_for_c_define(self, runner, project_with_c_define):
+        result = runner.invoke(
+            cli, ["--config", str(project_with_c_define / "vrzn.toml"), "get"],
+        )
+        assert result.exit_code == 0
+        assert "not found" not in result.output
+        assert "mismatch" not in result.output
+
+    def test_get_no_mismatch_count(self, runner, project_with_c_define):
+        result = runner.invoke(
+            cli, ["--config", str(project_with_c_define / "vrzn.toml"), "get"],
+        )
+        assert "out of sync" not in result.output
+
+    def test_bump_with_c_define(self, runner, project_with_c_define):
+        result = runner.invoke(
+            cli, ["--config", str(project_with_c_define / "vrzn.toml"), "--yes", "bump", "patch"],
+        )
+        assert result.exit_code == 0
+        header = (project_with_c_define / "mylib.h").read_text(encoding="utf-8")
+        assert "MYLIB_VERSION_PATCH 4" in header
+
+    def test_set_with_c_define(self, runner, project_with_c_define):
+        result = runner.invoke(
+            cli, ["--config", str(project_with_c_define / "vrzn.toml"), "--yes", "set", "2.0.0"],
+        )
+        assert result.exit_code == 0
+        header = (project_with_c_define / "mylib.h").read_text(encoding="utf-8")
+        assert "MYLIB_VERSION_MAJOR 2" in header
+        assert "MYLIB_VERSION_MINOR 0" in header
+        assert "MYLIB_VERSION_PATCH 0" in header

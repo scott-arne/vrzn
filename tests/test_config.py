@@ -107,7 +107,7 @@ class TestValidateConfig:
         validate_config(config)  # should not raise
 
     def test_valid_custom(self):
-        config = {"locations": [{"file": "f.py", "type": "custom", "pattern": "x", "replacement": "y", "extract": "z"}]}
+        config = {"locations": [{"file": "f.py", "type": "custom", "template": r'{version}'}]}
         validate_config(config)
 
     def test_missing_file_raises(self):
@@ -125,19 +125,9 @@ class TestValidateConfig:
         with pytest.raises(ConfigError, match="Unknown"):
             validate_config(config)
 
-    def test_custom_missing_pattern_raises(self):
-        config = {"locations": [{"file": "f", "type": "custom", "replacement": "y", "extract": "z"}]}
-        with pytest.raises(ConfigError, match="pattern"):
-            validate_config(config)
-
-    def test_custom_missing_replacement_raises(self):
-        config = {"locations": [{"file": "f", "type": "custom", "pattern": "x", "extract": "z"}]}
-        with pytest.raises(ConfigError, match="replacement"):
-            validate_config(config)
-
-    def test_custom_missing_extract_raises(self):
-        config = {"locations": [{"file": "f", "type": "custom", "pattern": "x", "replacement": "y"}]}
-        with pytest.raises(ConfigError, match="extract"):
+    def test_custom_missing_template_raises(self):
+        config = {"locations": [{"file": "f", "type": "custom"}]}
+        with pytest.raises(ConfigError, match="template"):
             validate_config(config)
 
     def test_c_define_missing_prefix_raises(self):

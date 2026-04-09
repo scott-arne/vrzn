@@ -121,6 +121,15 @@ def get(ctx: click.Context):
 
     for loc in locations:
         rel_path = _relative_path(loc.file, vctx.project_root)
+
+        if loc.component:
+            raw = loc.read_version()
+            if raw is None:
+                table.add_row(rel_path, loc.label, "-", "[yellow]not found[/yellow]")
+            else:
+                table.add_row(rel_path, loc.label, raw, "[green]ok[/green]")
+            continue
+
         parsed = loc.read_version_parsed()
 
         if parsed is None:

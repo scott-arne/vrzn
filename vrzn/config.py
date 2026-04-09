@@ -126,9 +126,8 @@ def validate_config(config: dict[str, Any]) -> None:
         loc_type = loc["type"]
 
         if loc_type == "custom":
-            for field in ("pattern", "replacement", "extract"):
-                if field not in loc:
-                    raise ConfigError(f"{prefix}: custom type requires '{field}' key")
+            if "template" not in loc:
+                raise ConfigError(f"{prefix}: custom type requires 'template' key")
         elif loc_type == "c-define":
             if "prefix" not in loc:
                 raise ConfigError(f"{prefix}: c-define type requires 'prefix' key")
