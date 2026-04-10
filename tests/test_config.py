@@ -148,3 +148,26 @@ class TestValidateConfig:
         config = {}
         with pytest.raises(ConfigError, match="locations"):
             validate_config(config)
+
+    def test_custom_with_unrecognized_placeholder_raises(self):
+        config = {"locations": [{"file": "f.py", "type": "custom", "template": r"{unknown}"}]}
+        with pytest.raises(ConfigError, match="placeholder"):
+            validate_config(config)
+
+    def test_custom_with_no_placeholder_raises(self):
+        config = {"locations": [{"file": "f.py", "type": "custom", "template": r"no placeholder"}]}
+        with pytest.raises(ConfigError, match="placeholder"):
+            validate_config(config)
+
+    def test_custom_with_multiple_placeholders_raises(self):
+        config = {"locations": [{"file": "f.py", "type": "custom", "template": r"{version} {base}"}]}
+        with pytest.raises(ConfigError, match="placeholder"):
+            validate_config(config)
+
+    def test_legacy_fields_emit_migration_error(self):
+        config = {"locations": [{
+            "file": "f.py", "type": "custom",
+            "pattern": "x", "replacement": "y", "extract": "z",
+        }]}
+        with pytest.raises(ConfigError, match="[Mm]igrat|template"):
+            validate_config(config)

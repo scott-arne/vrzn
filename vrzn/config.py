@@ -127,7 +127,22 @@ def validate_config(config: dict[str, Any]) -> None:
 
         if loc_type == "custom":
             if "template" not in loc:
+                if any(k in loc for k in ("pattern", "replacement", "extract")):
+                    raise ConfigError(
+                        f"{prefix}: custom locations now use a 'template' field instead of "
+                        f"'pattern'/'replacement'/'extract'. "
+                        f"See vrzn docs for migration instructions."
+                    )
                 raise ConfigError(f"{prefix}: custom type requires 'template' key")
+            # Validate the template has exactly one recognized placeholder
+            from vrzn.locations import _PLACEHOLDER_RE
+            matches = list(_PLACEHOLDER_RE.finditer(loc["template"]))
+            if len(matches) != 1:
+                raise ConfigError(
+                    f"{prefix}: template must contain exactly one placeholder "
+                    f"(version, base, info_tuple, major, minor, patch), "
+                    f"found {len(matches)}"
+                )
         elif loc_type == "c-define":
             if "prefix" not in loc:
                 raise ConfigError(f"{prefix}: c-define type requires 'prefix' key")

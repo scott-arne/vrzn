@@ -273,6 +273,36 @@ class TestLocationsFromConfig:
         for loc in locations:
             assert loc.format == VersionFormat.COMPONENT
 
+    def test_custom_template_location(self, tmp_path):
+        config = {"locations": [{
+            "file": "conf.py", "type": "custom",
+            "template": r'release\s*=\s*"{version}"',
+        }]}
+        locations = locations_from_config(config, project_root=tmp_path)
+        assert len(locations) == 1
+        assert locations[0].label == "custom"
+        assert locations[0].format == VersionFormat.FULL
+
+    def test_custom_template_location_with_label(self, tmp_path):
+        config = {"locations": [{
+            "file": "conf.py", "type": "custom",
+            "label": "Sphinx", "template": r'release\s*=\s*"{version}"',
+        }]}
+        locations = locations_from_config(config, project_root=tmp_path)
+        assert locations[0].label == "Sphinx"
+
+    def test_custom_template_end_to_end(self, tmp_path):
+        f = tmp_path / "conf.py"
+        f.write_text('release = "1.0.0"\n', encoding="utf-8")
+        config = {"locations": [{
+            "file": "conf.py", "type": "custom",
+            "template": r'release\s*=\s*"{version}"',
+        }]}
+        locations = locations_from_config(config, project_root=tmp_path)
+        assert locations[0].read_version() == "1.0.0"
+        locations[0].write_version(Version(2, 0, 0))
+        assert 'release = "2.0.0"' in f.read_text(encoding="utf-8")
+
 
 class TestCheckAgreement:
     """Test version agreement checking."""

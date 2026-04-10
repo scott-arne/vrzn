@@ -185,12 +185,15 @@ class VersionLocation:
             return False
         content = self.file.read_text(encoding="utf-8")
 
-        version_str = ver.base if self.base_only else ver.normalized
-        new = self._replacement.format(
-            major=ver.major, minor=ver.minor, patch=ver.patch,
-            version=version_str, base=ver.base, info_tuple=ver.info_tuple,
+        formatted = self._replacement.format(
+            version=ver.normalized,
+            base=ver.base,
+            info_tuple=ver.info_tuple,
+            major=ver.major,
+            minor=ver.minor,
+            patch=ver.patch,
         )
-        new_content, count = re.subn(self._regex, new, content, flags=re.MULTILINE)
+        new_content, count = re.subn(self._regex, formatted, content, flags=re.MULTILINE)
         if count == 0:
             return False
         self.file.write_text(new_content, encoding="utf-8")
