@@ -19,7 +19,11 @@ def _make_c_define_templates(prefix: str) -> list[str]:
 
     :param prefix: The macro prefix (e.g., "MYLIB" for MYLIB_VERSION_MAJOR).
     :returns: List of three template strings (MAJOR, MINOR, PATCH).
+    :raises ValueError: If prefix is not a valid C identifier.
     """
+    import re
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", prefix):
+        raise ValueError(f"c-define prefix must be a valid C identifier, got: {prefix!r}")
     return [
         rf"#define\s+{prefix}_VERSION_MAJOR\s+{{major}}",
         rf"#define\s+{prefix}_VERSION_MINOR\s+{{minor}}",

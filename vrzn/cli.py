@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.table import Table
 
 from vrzn.config import ConfigError, find_config, load_config, validate_config
-from vrzn.locations import VersionLocation, check_agreement, locations_from_config
+from vrzn.locations import VersionFormat, VersionLocation, check_agreement, locations_from_config
 from vrzn.version import Version, parse_version
 
 # Rich click configuration
@@ -122,7 +122,7 @@ def get(ctx: click.Context):
     for loc in locations:
         rel_path = _relative_path(loc.file, vctx.project_root)
 
-        if loc.component:
+        if loc.format == VersionFormat.COMPONENT:
             raw = loc.read_version()
             if raw is None:
                 table.add_row(rel_path, loc.label, "-", "[yellow]not found[/yellow]")
@@ -135,10 +135,10 @@ def get(ctx: click.Context):
         if parsed is None:
             table.add_row(rel_path, loc.label, "-", "[yellow]not found[/yellow]")
         elif id(loc) in mismatch_locs:
-            ver_display = parsed.base if loc.base_only else parsed.normalized
+            ver_display = parsed.base if loc.format == VersionFormat.BASE else parsed.normalized
             table.add_row(rel_path, loc.label, f"[red]{ver_display}[/red]", "[red]mismatch[/red]")
         else:
-            ver_display = parsed.base if loc.base_only else parsed.normalized
+            ver_display = parsed.base if loc.format == VersionFormat.BASE else parsed.normalized
             table.add_row(rel_path, loc.label, ver_display, "[green]ok[/green]")
 
     console.print()
@@ -224,7 +224,7 @@ def _update_all(locations: list[VersionLocation], ver: Version, vctx: "VrznConte
 
     for loc in locations:
         rel_path = _relative_path(loc.file, vctx.project_root)
-        target_str = ver.base if loc.base_only else ver.normalized
+        target_str = ver.normalized if loc.format == VersionFormat.FULL else ver.base
         current = loc.read_version() or "-"
 
         if not loc.file.exists():

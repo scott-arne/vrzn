@@ -1,4 +1,3 @@
-import re
 import pytest
 from pathlib import Path
 from vrzn.presets import get_preset, PRESET_REGISTRY

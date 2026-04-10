@@ -104,9 +104,9 @@ def compile_template(file: Path, label: str, template: str) -> "VersionLocation"
         file=file,
         label=label,
         template=template,
-        _regex=regex,
-        _replacement=replacement,
-        _version_group=version_group,
+        regex=regex,
+        replacement=replacement,
+        version_group=version_group,
         format=fmt,
     )
 
@@ -120,29 +120,19 @@ class VersionLocation:
     :param file: Absolute path to the file.
     :param label: Display name for this location.
     :param template: Original template string with placeholder.
-    :param _regex: Compiled extraction/replacement regex.
-    :param _replacement: Format string with backreferences and placeholder key.
-    :param _version_group: Capture group index for the version data.
+    :param regex: Compiled extraction/replacement regex.
+    :param replacement: Format string with backreferences and placeholder key.
+    :param version_group: Capture group index for the version data.
     :param format: The VersionFormat classification.
     """
 
     file: Path
     label: str
     template: str
-    _regex: str
-    _replacement: str
-    _version_group: int
+    regex: str
+    replacement: str
+    version_group: int
     format: VersionFormat
-
-    @property
-    def component(self) -> bool:
-        """Backward-compatible property: True if format is COMPONENT."""
-        return self.format == VersionFormat.COMPONENT
-
-    @property
-    def base_only(self) -> bool:
-        """Backward-compatible property: True if format is BASE or COMPONENT."""
-        return self.format in (VersionFormat.BASE, VersionFormat.COMPONENT)
 
     def read_version(self) -> Optional[str]:
         """Extract the current version string from this location.
@@ -152,9 +142,9 @@ class VersionLocation:
         if not self.file.exists():
             return None
         content = self.file.read_text(encoding="utf-8")
-        match = re.search(self._regex, content, re.MULTILINE)
+        match = re.search(self.regex, content, re.MULTILINE)
         if match:
-            return match.group(self._version_group)
+            return match.group(self.version_group)
         return None
 
     def read_version_parsed(self) -> Optional[Version]:
@@ -185,7 +175,7 @@ class VersionLocation:
             return False
         content = self.file.read_text(encoding="utf-8")
 
-        formatted = self._replacement.format(
+        formatted = self.replacement.format(
             version=ver.normalized,
             base=ver.base,
             info_tuple=ver.info_tuple,
@@ -193,7 +183,7 @@ class VersionLocation:
             minor=ver.minor,
             patch=ver.patch,
         )
-        new_content, count = re.subn(self._regex, formatted, content, flags=re.MULTILINE)
+        new_content, count = re.subn(self.regex, formatted, content, flags=re.MULTILINE)
         if count == 0:
             return False
         self.file.write_text(new_content, encoding="utf-8")

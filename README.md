@@ -170,21 +170,26 @@ vrzn searches up the directory tree for config in this order:
 
 ### Built-in Presets
 
-| Preset | Matches | `base_only` |
-|--------|---------|:-----------:|
-| `pyproject-version` | `version = "X.Y.Z"` in TOML | no |
-| `python-dunder` | `__version__ = "X.Y.Z"` | no |
-| `python-version-info` | `__version_info__ = (X, Y, Z)` | yes |
-| `cmake-project` | `project(NAME VERSION X.Y.Z)` | yes |
-| `c-define` | `#define PREFIX_VERSION_MAJOR N` | yes |
-| `cargo-toml` | `version = "X.Y.Z"` in Cargo.toml | no |
-| `package-json` | `"version": "X.Y.Z"` in JSON | no |
-| `maven-pom` | `<version>X.Y.Z</version>` | no |
-| `gradle-version` | `version = 'X.Y.Z'` in Gradle | no |
+Each preset is a template string with a version placeholder that tells vrzn how to find and replace the version in a file.
 
-Presets marked `base_only` write only the `MAJOR.MINOR.PATCH` portion, ignoring pre-release or post-release suffixes.
+| Preset | Matches | Format |
+|--------|---------|--------|
+| `pyproject-version` | `version = "X.Y.Z"` in TOML | full |
+| `python-dunder` | `__version__ = "X.Y.Z"` | full |
+| `python-version-info` | `__version_info__ = (X, Y, Z)` | base |
+| `cmake-project` | `project(NAME VERSION X.Y.Z)` | base |
+| `c-define` | `#define PREFIX_VERSION_MAJOR N` | component |
+| `cargo-toml` | `version = "X.Y.Z"` in Cargo.toml | full |
+| `package-json` | `"version": "X.Y.Z"` in JSON | full |
+| `maven-pom` | `<version>X.Y.Z</version>` | full |
+| `gradle-version` | `version = 'X.Y.Z'` in Gradle | full |
 
-The `c-define` preset requires a `prefix` parameter:
+**Format types:**
+- **full** — reads/writes a complete PEP 440 version string (e.g., `1.2.3rc1`)
+- **base** — reads/writes only MAJOR.MINOR.PATCH (e.g., `1.2.3`), ignoring pre-release suffixes
+- **component** — reads/writes a single integer (MAJOR, MINOR, or PATCH); excluded from agreement checking
+
+The `c-define` preset requires a `prefix` parameter and expands to three component locations:
 
 ```toml
 [[locations]]
@@ -195,19 +200,28 @@ prefix = "MYLIB"
 
 ### Custom Locations
 
-For files that don't match a built-in preset, use `custom` with explicit regex patterns:
+For files that don't match a built-in preset, use `custom` with a template string containing a version placeholder:
 
 ```toml
 [[locations]]
 file = "docs/conf.py"
 type = "custom"
 label = "Sphinx config"
-pattern = '(release\s*=\s*")[^"]+"'
-replacement = '\g<1>{version}"'
-extract = 'release\s*=\s*"([^"]+)"'
+template = 'release\s*=\s*"{version}"'
 ```
 
-Replacement format variables: `{version}`, `{major}`, `{minor}`, `{patch}`, `{info_tuple}`.
+The template is a regex string with exactly one placeholder embedded in it. The text around the placeholder is standard regex that matches the surrounding context in the file.
+
+**Available placeholders:**
+
+| Placeholder | Writes | Format |
+|-------------|--------|--------|
+| `{version}` | Full PEP 440 version (e.g., `1.2.3rc1`) | full |
+| `{base}` | MAJOR.MINOR.PATCH only (e.g., `1.2.3`) | base |
+| `{info_tuple}` | Comma-separated tuple (e.g., `1, 2, 3`) | base |
+| `{major}` | Major version integer | component |
+| `{minor}` | Minor version integer | component |
+| `{patch}` | Patch version integer | component |
 
 ## Development
 

@@ -1,4 +1,3 @@
-import re
 import pytest
 from pathlib import Path
 from vrzn.version import Version
@@ -106,7 +105,7 @@ class TestCompileTemplate:
         assert loc.write_version(Version(2, 3, 4, pre=("rc", 1))) is True
         content = f.read_text(encoding="utf-8")
         assert "VERSION 2.3.4" in content
-        # Pre-release suffix should NOT appear (base_only)
+        # Pre-release suffix should NOT appear (BASE format)
         assert "rc1" not in content
 
     def test_write_info_tuple(self, tmp_path):
@@ -149,27 +148,6 @@ class TestCompileTemplate:
         loc = compile_template(Path("f"), "mylabel", r'{version}')
         assert loc.label == "mylabel"
 
-    # --- Backward compatibility properties ---
-
-    def test_component_property_true_for_component(self):
-        loc = compile_template(Path("f"), "test", r"MAJOR\s+{major}")
-        assert loc.component is True
-
-    def test_component_property_false_for_full(self):
-        loc = compile_template(Path("f"), "test", r"{version}")
-        assert loc.component is False
-
-    def test_base_only_true_for_base(self):
-        loc = compile_template(Path("f"), "test", r"VERSION\s+{base}")
-        assert loc.base_only is True
-
-    def test_base_only_true_for_component(self):
-        loc = compile_template(Path("f"), "test", r"MAJOR\s+{major}")
-        assert loc.base_only is True
-
-    def test_base_only_false_for_full(self):
-        loc = compile_template(Path("f"), "test", r"{version}")
-        assert loc.base_only is False
 
 
 class TestVersionLocationRead:
@@ -216,7 +194,7 @@ class TestVersionLocationWrite:
         assert result is True
         assert 'version = "2.0.0"' in f.read_text(encoding="utf-8")
 
-    def test_write_version_base_only(self, tmp_path):
+    def test_write_version_base_format(self, tmp_path):
         f = tmp_path / "CMakeLists.txt"
         f.write_text("project(mylib VERSION 1.0.0 LANGUAGES CXX)\n", encoding="utf-8")
         loc = compile_template(f, "test", r"project\([^\)]*VERSION\s+{base}")
