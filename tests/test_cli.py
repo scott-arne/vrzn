@@ -136,6 +136,40 @@ class TestBump:
         assert result.exit_code == 0  # proceeds with --yes
 
 
+class TestSubcommandLevelFlags:
+    """Test that global flags work when placed after the subcommand name."""
+
+    def test_bump_yes_after_subcommand(self, runner, project):
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "bump", "--yes", "patch"])
+        assert result.exit_code == 0
+        assert 'version = "1.2.4"' in (project / "pyproject.toml").read_text(encoding="utf-8")
+
+    def test_bump_short_yes_after_subcommand(self, runner, project):
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "bump", "-y", "patch"])
+        assert result.exit_code == 0
+        assert 'version = "1.2.4"' in (project / "pyproject.toml").read_text(encoding="utf-8")
+
+    def test_set_yes_after_subcommand(self, runner, project):
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "set", "--yes", "2.0.0"])
+        assert result.exit_code == 0
+        assert 'version = "2.0.0"' in (project / "pyproject.toml").read_text(encoding="utf-8")
+
+    def test_bump_dry_run_after_subcommand(self, runner, project):
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "bump", "--dry-run", "patch"])
+        assert result.exit_code == 0
+        assert 'version = "1.2.3"' in (project / "pyproject.toml").read_text(encoding="utf-8")
+
+    def test_get_quiet_after_subcommand(self, runner, project):
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "get", "--quiet"])
+        assert result.exit_code == 0
+        assert result.output.strip() == "1.2.3"
+
+    def test_bump_config_after_subcommand(self, runner, project):
+        result = runner.invoke(cli, ["bump", "--config", str(project / "vrzn.toml"), "--yes", "patch"])
+        assert result.exit_code == 0
+        assert 'version = "1.2.4"' in (project / "pyproject.toml").read_text(encoding="utf-8")
+
+
 @pytest.fixture
 def project_with_c_define(tmp_path):
     """Create a project with c-define locations alongside standard locations."""

@@ -79,6 +79,54 @@ def cli(ctx: click.Context, dry_run: bool, yes: bool, quiet: bool, config_path: 
     ctx.obj["vrzn"] = VrznContext(dry_run, yes, quiet, config_path)
 
 
+def _common_options(f):
+    """Add common CLI options to a subcommand.
+
+    Mirrors the global group options so users can place flags like ``--yes``
+    either before or after the subcommand name.
+    """
+    f = click.option("--config", "-c", "config_path", type=click.Path(path_type=Path),
+                      default=None, help="Path to config file (overrides discovery).")(f)
+    f = click.option("--quiet", "-q", is_flag=True, default=False,
+                      help="Machine-readable output, no tables.")(f)
+    f = click.option("--yes", "-y", is_flag=True, default=False,
+                      help="Skip confirmation prompts.")(f)
+    f = click.option("--dry-run", is_flag=True, default=False,
+                      help="Show what would change without writing files.")(f)
+    return f
+
+
+def _merge_globals(
+    ctx: click.Context,
+    dry_run: bool,
+    yes: bool,
+    quiet: bool,
+    config_path: Path | None,
+) -> VrznContext:
+    """Merge subcommand-level flags into the shared VrznContext.
+
+    Boolean flags are OR-ed so that ``vrzn --yes bump`` and ``vrzn bump --yes``
+    are equivalent.  A subcommand-level ``--config`` overrides the global one.
+
+    :param ctx: Click context.
+    :param dry_run: Subcommand-level ``--dry-run`` flag.
+    :param yes: Subcommand-level ``--yes`` flag.
+    :param quiet: Subcommand-level ``--quiet`` flag.
+    :param config_path: Subcommand-level ``--config`` path.
+    :returns: Updated VrznContext.
+    """
+    vctx: VrznContext = ctx.obj["vrzn"]
+    if dry_run:
+        vctx.dry_run = True
+    if yes:
+        vctx.yes = True
+    if quiet:
+        vctx.quiet = True
+    if config_path is not None:
+        vctx.config_path = config_path
+    return vctx
+
+
 def _load_or_exit(vctx: VrznContext, ctx: click.Context) -> list[VersionLocation]:
     """Load locations from config, printing errors and exiting on failure."""
     try:
@@ -90,10 +138,11 @@ def _load_or_exit(vctx: VrznContext, ctx: click.Context) -> list[VersionLocation
 
 
 @cli.command()
+@_common_options
 @click.pass_context
-def get(ctx: click.Context):
+def get(ctx: click.Context, dry_run: bool, yes: bool, quiet: bool, config_path: Path | None):
     """Display the current version in all configured files."""
-    vctx: VrznContext = ctx.obj["vrzn"]
+    vctx = _merge_globals(ctx, dry_run, yes, quiet, config_path)
     locations = _load_or_exit(vctx, ctx)
     if not locations:
         return
@@ -158,14 +207,16 @@ def get(ctx: click.Context):
 
 @cli.command("set")
 @click.argument("version")
+@_common_options
 @click.pass_context
-def set_version(ctx: click.Context, version: str):
+def set_version(ctx: click.Context, version: str, dry_run: bool, yes: bool, quiet: bool,
+                config_path: Path | None):
     """Set all version numbers to VERSION across all configured files.
 
     VERSION supports full PEP 440 specification (e.g., 1.0.0, 1.0.0rc1, 1.0.0.post1).
     Non-normalized forms are accepted and automatically normalized.
     """
-    vctx: VrznContext = ctx.obj["vrzn"]
+    vctx = _merge_globals(ctx, dry_run, yes, quiet, config_path)
 
     try:
         ver = parse_version(version)
@@ -251,14 +302,16 @@ _PRE_LABELS = {"alpha": "a", "a": "a", "beta": "b", "b": "b", "rc": "rc"}
 @click.argument("part", type=click.Choice(["major", "minor", "patch", "pre", "release"]))
 @click.option("--pre", "pre_label", type=click.Choice(["alpha", "a", "beta", "b", "rc"]),
               default=None, help="Start or promote a pre-release with this label.")
+@_common_options
 @click.pass_context
-def bump(ctx: click.Context, part: str, pre_label: str | None):
+def bump(ctx: click.Context, part: str, pre_label: str | None, dry_run: bool, yes: bool,
+         quiet: bool, config_path: Path | None):
     """Bump the version number across all configured files.
 
     PART must be one of: major, minor, patch, pre, release.
     Use --pre to enter or promote a pre-release state.
     """
-    vctx: VrznContext = ctx.obj["vrzn"]
+    vctx = _merge_globals(ctx, dry_run, yes, quiet, config_path)
     locations = _load_or_exit(vctx, ctx)
     if not locations:
         return
