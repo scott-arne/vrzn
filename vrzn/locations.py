@@ -5,7 +5,7 @@ from collections import Counter
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, NamedTuple, Optional
+from typing import Any, NamedTuple
 
 from vrzn.presets import get_preset
 from vrzn.version import Version, parse_version
@@ -134,7 +134,7 @@ class VersionLocation:
     version_group: int
     format: VersionFormat
 
-    def read_version(self) -> Optional[str]:
+    def read_version(self) -> str | None:
         """Extract the current version string from this location.
 
         :returns: Version string or None if not found.
@@ -147,7 +147,7 @@ class VersionLocation:
             return match.group(self.version_group)
         return None
 
-    def read_version_parsed(self) -> Optional[Version]:
+    def read_version_parsed(self) -> Version | None:
         """Extract the current version as a parsed Version object.
 
         Returns None for COMPONENT format locations since they hold
@@ -194,7 +194,7 @@ class Mismatch(NamedTuple):
     """A version location that disagrees with consensus."""
 
     location: VersionLocation
-    found: Optional[Version]
+    found: Version | None
 
 
 def locations_from_config(config: dict[str, Any], project_root: Path) -> list[VersionLocation]:
@@ -220,24 +220,24 @@ def locations_from_config(config: dict[str, Any], project_root: Path) -> list[Ve
             assert isinstance(templates, list)
             label_override = entry.get("label")
             labels = [f"c-define ({c})" for c in ("MAJOR", "MINOR", "PATCH")]
-            for template, default_label in zip(templates, labels):
+            for template, default_label in zip(templates, labels, strict=True):
                 result.append(compile_template(
                     file=file_path,
                     label=label_override or default_label,
                     template=template,
                 ))
         else:
-            template = get_preset(loc_type)
-            assert isinstance(template, str)
+            preset_template = get_preset(loc_type)
+            assert isinstance(preset_template, str)
             result.append(compile_template(
                 file=file_path,
                 label=entry.get("label", loc_type),
-                template=template,
+                template=preset_template,
             ))
     return result
 
 
-def check_agreement(locations: list[VersionLocation]) -> tuple[Optional[Version], list[Mismatch]]:
+def check_agreement(locations: list[VersionLocation]) -> tuple[Version | None, list[Mismatch]]:
     """Check whether all locations agree on the version.
 
     Component locations (e.g., individual c-define MAJOR/MINOR/PATCH entries)
@@ -247,13 +247,16 @@ def check_agreement(locations: list[VersionLocation]) -> tuple[Optional[Version]
     :param locations: List of version locations to check.
     :returns: Tuple of (consensus version or None, list of mismatches).
     """
-    versions: list[tuple[VersionLocation, Optional[Version]]] = []
+    versions: list[tuple[VersionLocation, Version | None]] = []
     for loc in locations:
         if loc.format == VersionFormat.COMPONENT:
             continue
         versions.append((loc, loc.read_version_parsed()))
 
-    parsed = [(loc, v) for loc, v in versions if v is not None]
+    parsed: list[tuple[VersionLocation, Version]] = []
+    for loc, version in versions:
+        if version is not None:
+            parsed.append((loc, version))
     if not parsed:
         return None, []
 
@@ -270,8 +273,8 @@ def check_agreement(locations: list[VersionLocation]) -> tuple[Optional[Version]
     consensus = min(candidates, key=lambda v: first_seen[v])
 
     mismatches = []
-    for loc, v in versions:
-        if v is None or v != consensus:
-            mismatches.append(Mismatch(location=loc, found=v))
+    for loc, maybe_version in versions:
+        if maybe_version is None or maybe_version != consensus:
+            mismatches.append(Mismatch(location=loc, found=maybe_version))
 
     return consensus, mismatches

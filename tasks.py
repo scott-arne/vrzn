@@ -1,6 +1,7 @@
 import sys
-from invoke.tasks import task
 from pathlib import Path
+
+from invoke.tasks import task
 
 ROOT = Path(__file__).parent.absolute()
 

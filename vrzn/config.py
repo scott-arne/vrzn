@@ -3,7 +3,7 @@
 import json
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, cast
 
 from vrzn.presets import PRESET_REGISTRY
 
@@ -23,7 +23,7 @@ class ConfigError(Exception):
 _CONFIG_FILENAMES = ("vrzn.toml", "vrzn.yaml", "vrzn.json", "pyproject.toml")
 
 
-def find_config(start_dir: Optional[Path] = None) -> Optional[Path]:
+def find_config(start_dir: Path | None = None) -> Path | None:
     """Walk up from start_dir looking for a vrzn config file.
 
     :param start_dir: Directory to start searching from. Defaults to CWD.
@@ -81,19 +81,19 @@ def load_config(config_path: Path) -> dict[str, Any]:
                 data = tomllib.load(f)
             if name == "pyproject.toml":
                 data = data.get("tool", {}).get("vrzn", {})
-            return data
+            return cast(dict[str, Any], data)
         elif name.endswith(".json"):
             with open(config_path, encoding="utf-8") as f:
-                return json.load(f)
+                return cast(dict[str, Any], json.load(f))
         elif name.endswith((".yaml", ".yml")):
             try:
                 import yaml
-            except ImportError:
+            except ImportError as e:
                 raise ConfigError(
                     "YAML config requires PyYAML. Install it with: pip install 'vrzn[yaml]'"
-                )
+                ) from e
             with open(config_path, encoding="utf-8") as f:
-                return yaml.safe_load(f)
+                return cast(dict[str, Any], yaml.safe_load(f))
         else:
             raise ConfigError(f"Unsupported config file format: {name}")
     except ConfigError:

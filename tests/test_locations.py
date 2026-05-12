@@ -1,10 +1,14 @@
-import pytest
 from pathlib import Path
-from vrzn.version import Version
+
+import pytest
+
 from vrzn.locations import (
-    VersionFormat, VersionLocation, compile_template,
-    locations_from_config, check_agreement,
+    VersionFormat,
+    check_agreement,
+    compile_template,
+    locations_from_config,
 )
+from vrzn.version import Version
 
 
 class TestCompileTemplate:

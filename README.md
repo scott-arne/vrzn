@@ -113,9 +113,12 @@ $ vrzn --dry-run bump minor
 Pre-release workflows:
 
 ```bash
-vrzn -y bump patch --pre rc  # 1.0.0 -> 1.0.1rc1
-vrzn -y bump pre             # 1.0.1rc1 -> 1.0.1rc2
-vrzn -y bump release         # 1.0.1rc2 -> 1.0.1
+vrzn -y bump major dev  # 1.2.3 -> 2.0.0.dev1
+vrzn -y bump minor a    # 1.2.3 -> 1.3.0a1
+vrzn -y bump patch rc   # 1.2.3 -> 1.2.4rc1
+vrzn -y bump pre        # 1.2.4rc1 -> 1.2.4rc2
+vrzn -y bump release    # 1.2.4rc2 -> 1.2.4
+vrzn -y bump post       # 1.2.4 -> 1.2.4.post1
 ```
 
 ## CLI Reference
@@ -149,11 +152,13 @@ Prompts for confirmation unless `--yes` or `--dry-run` is set.
 
 **Exit codes:** `1` for invalid version format, `2` if no config found.
 
-#### `vrzn bump PART [--pre LABEL]`
+#### `vrzn bump PART [LABEL] [--pre LABEL]`
 
-Bump the version number. PART must be one of: `major`, `minor`, `patch`, `pre`, `release`.
+Bump the version number. PART must be one of: `major`, `minor`, `patch`, `pre`, `release`, `post`.
 
-Use `--pre` with a label (`alpha`, `a`, `beta`, `b`, `rc`) to enter a pre-release state. Use `bump pre` to increment an existing pre-release. Use `bump release` to finalize a pre-release to its stable version.
+Use a positional LABEL or `--pre` with a label (`alpha`, `a`, `beta`, `b`, `dev`, `rc`) to enter a pre-release or dev-release state. For example, `vrzn bump minor rc` moves `1.2.3` to `1.3.0rc1`, and `vrzn bump patch --pre dev` moves `1.2.3` to `1.2.4.dev1`.
+
+Use `bump pre` to increment an existing pre-release or dev-release. Use `bump release` to finalize a pre-release to its stable version. Use `bump post` to start or increment a post-release suffix.
 
 If versions are out of sync, vrzn warns and uses a consensus version (most common across locations). Prompts for confirmation unless `--yes` or `--dry-run` is set.
 

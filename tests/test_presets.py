@@ -1,9 +1,10 @@
-import pytest
 from pathlib import Path
-from vrzn.presets import get_preset, PRESET_REGISTRY
-from vrzn.locations import compile_template
-from vrzn.version import Version
 
+import pytest
+
+from vrzn.locations import compile_template
+from vrzn.presets import PRESET_REGISTRY, get_preset
+from vrzn.version import Version
 
 # Sample file contents for testing
 PYPROJECT_TOML = '''

@@ -3,7 +3,6 @@
 import re
 from dataclasses import dataclass
 from functools import total_ordering
-from typing import Optional
 
 # PEP 440 pre-release labels and their normalized forms
 _PRE_LABELS = {
@@ -40,10 +39,10 @@ class Version:
     major: int
     minor: int
     patch: int
-    pre: Optional[tuple[str, int]] = None
-    post: Optional[int] = None
-    dev: Optional[int] = None
-    epoch: Optional[int] = None
+    pre: tuple[str, int] | None = None
+    post: int | None = None
+    dev: int | None = None
+    epoch: int | None = None
 
     @property
     def normalized(self) -> str:
@@ -96,15 +95,11 @@ class Version:
         :returns: Tuple for sorting and comparison.
         """
         epoch = self.epoch if self.epoch is not None else 0
-        if self.pre is not None:
-            pre_key = (0, PRE_LABEL_ORDER[self.pre[0]], self.pre[1])
-        else:
-            pre_key = (1,)
+        pre_key: tuple[int, ...] = (
+            (0, PRE_LABEL_ORDER[self.pre[0]], self.pre[1]) if self.pre is not None else (1,)
+        )
         post_key = self.post if self.post is not None else -1
-        if self.dev is not None:
-            dev_key = (0, self.dev)
-        else:
-            dev_key = (1,)
+        dev_key: tuple[int, ...] = (0, self.dev) if self.dev is not None else (1,)
         return (epoch, self.major, self.minor, self.patch, pre_key, post_key, dev_key)
 
     def __eq__(self, other: object) -> bool:
@@ -126,44 +121,69 @@ class Version:
     def __repr__(self) -> str:
         return f"Version('{self.normalized}')"
 
-    def bump_major(self, pre_label: Optional[str] = None) -> "Version":
+    @staticmethod
+    def _initial_suffix(label: str | None) -> tuple[tuple[str, int] | None, int | None]:
+        """Return the initial pre/dev suffix for a bumped release."""
+        if label is None:
+            return None, None
+        if label == "dev":
+            return None, 1
+        if label not in PRE_LABEL_ORDER:
+            raise ValueError(f"Unknown pre-release label: {label}")
+        return (label, 1), None
+
+    def bump_major(self, pre_label: str | None = None) -> "Version":
         """Bump major version. Zeros minor and patch, clears suffixes.
 
-        :param pre_label: If given, start a pre-release with this label.
+        :param pre_label: If given, start a pre-release or dev release with this label.
         :returns: New Version with bumped major.
         """
-        pre = (pre_label, 1) if pre_label else None
-        return Version(self.major + 1, 0, 0, pre=pre, epoch=self.epoch)
+        pre, dev = self._initial_suffix(pre_label)
+        return Version(self.major + 1, 0, 0, pre=pre, dev=dev, epoch=self.epoch)
 
-    def bump_minor(self, pre_label: Optional[str] = None) -> "Version":
+    def bump_minor(self, pre_label: str | None = None) -> "Version":
         """Bump minor version. Zeros patch, clears suffixes.
 
-        :param pre_label: If given, start a pre-release with this label.
+        :param pre_label: If given, start a pre-release or dev release with this label.
         :returns: New Version with bumped minor.
         """
-        pre = (pre_label, 1) if pre_label else None
-        return Version(self.major, self.minor + 1, 0, pre=pre, epoch=self.epoch)
+        pre, dev = self._initial_suffix(pre_label)
+        return Version(self.major, self.minor + 1, 0, pre=pre, dev=dev, epoch=self.epoch)
 
-    def bump_patch(self, pre_label: Optional[str] = None) -> "Version":
+    def bump_patch(self, pre_label: str | None = None) -> "Version":
         """Bump patch version. Clears suffixes.
 
-        :param pre_label: If given, start a pre-release with this label.
+        :param pre_label: If given, start a pre-release or dev release with this label.
         :returns: New Version with bumped patch.
         """
-        pre = (pre_label, 1) if pre_label else None
-        return Version(self.major, self.minor, self.patch + 1, pre=pre, epoch=self.epoch)
+        pre, dev = self._initial_suffix(pre_label)
+        return Version(self.major, self.minor, self.patch + 1, pre=pre, dev=dev, epoch=self.epoch)
 
-    def bump_pre(self, label: Optional[str] = None) -> "Version":
+    def bump_pre(self, label: str | None = None) -> "Version":
         """Increment pre-release number, or promote to a new label.
 
-        :param label: Pre-release label to promote to (a, b, rc).
+        :param label: Pre-release label to promote to (a, b, rc), or ``dev`` to keep dev releases.
         :returns: New Version with bumped pre-release.
         :raises ValueError: If no pre-release is active, or label goes backward.
         """
         if self.pre is None:
+            if self.dev is not None:
+                if label is None or label == "dev":
+                    return Version(
+                        self.major, self.minor, self.patch,
+                        post=self.post, dev=self.dev + 1, epoch=self.epoch,
+                    )
+
+                pre, _ = self._initial_suffix(label)
+                return Version(self.major, self.minor, self.patch, pre=pre, epoch=self.epoch)
             raise ValueError("Cannot bump pre-release: no active pre-release suffix")
 
         current_label, current_num = self.pre
+
+        if label == "dev":
+            raise ValueError(
+                f"Cannot change pre-release label backward: {current_label} -> {label}"
+            )
 
         if label is None:
             return Version(
@@ -198,6 +218,14 @@ class Version:
         if self.pre is None:
             raise ValueError("Cannot bump release: already a final release")
         return Version(self.major, self.minor, self.patch, epoch=self.epoch)
+
+    def bump_post(self) -> "Version":
+        """Increment the post-release number, starting at ``.post1``.
+
+        :returns: New Version with bumped post-release suffix.
+        """
+        post = self.post + 1 if self.post is not None else 1
+        return Version(self.major, self.minor, self.patch, pre=self.pre, post=post, epoch=self.epoch)
 
 
 def parse_version(version_str: str) -> Version:

@@ -41,16 +41,18 @@ class VrznContext:
         if self._locations is not None:
             return self._locations
 
+        config_file: Path
         if self.config_path:
             config_file = self.config_path
             if not config_file.is_file():
                 raise ConfigError(f"Config file not found: {config_file}")
         else:
-            config_file = find_config()
-            if config_file is None:
+            discovered = find_config()
+            if discovered is None:
                 raise ConfigError(
                     "No vrzn config found. Create vrzn.toml or add [tool.vrzn] to pyproject.toml."
                 )
+            config_file = discovered
 
         self._project_root = config_file.parent
         config = load_config(config_file)
@@ -294,22 +296,24 @@ def _update_all(locations: list[VersionLocation], ver: Version, vctx: "VrznConte
     return table
 
 
-# Valid pre-release labels for the --pre option
-_PRE_LABELS = {"alpha": "a", "a": "a", "beta": "b", "b": "b", "rc": "rc"}
+# Valid labels for pre-release and dev-release bump targets.
+_PRE_LABELS = {"alpha": "a", "a": "a", "beta": "b", "b": "b", "dev": "dev", "rc": "rc"}
+_PRE_LABEL_CHOICES = list(_PRE_LABELS)
 
 
 @cli.command()
-@click.argument("part", type=click.Choice(["major", "minor", "patch", "pre", "release"]))
-@click.option("--pre", "pre_label", type=click.Choice(["alpha", "a", "beta", "b", "rc"]),
+@click.argument("part", type=click.Choice(["major", "minor", "patch", "pre", "release", "post"]))
+@click.argument("label", required=False, type=click.Choice(_PRE_LABEL_CHOICES))
+@click.option("--pre", "pre_label", type=click.Choice(_PRE_LABEL_CHOICES),
               default=None, help="Start or promote a pre-release with this label.")
 @_common_options
 @click.pass_context
-def bump(ctx: click.Context, part: str, pre_label: str | None, dry_run: bool, yes: bool,
+def bump(ctx: click.Context, part: str, label: str | None, pre_label: str | None, dry_run: bool, yes: bool,
          quiet: bool, config_path: Path | None):
     """Bump the version number across all configured files.
 
-    PART must be one of: major, minor, patch, pre, release.
-    Use --pre to enter or promote a pre-release state.
+    PART must be one of: major, minor, patch, pre, release, post.
+    Use LABEL or --pre to enter or promote a pre-release or dev-release state.
     """
     vctx = _merge_globals(ctx, dry_run, yes, quiet, config_path)
     locations = _load_or_exit(vctx, ctx)
@@ -328,8 +332,19 @@ def bump(ctx: click.Context, part: str, pre_label: str | None, dry_run: bool, ye
             console.print("\n  [dim]Aborted.[/dim]\n")
             return
 
-    # Normalize the pre-release label
-    normalized_label = _PRE_LABELS[pre_label] if pre_label else None
+    if label is not None and pre_label is not None:
+        err_console.print("[red]Use either a positional pre-release label or --pre, not both.[/red]")
+        ctx.exit(1)
+        return
+
+    # Normalize the pre-release or dev-release label.
+    label_value = pre_label or label
+    normalized_label = _PRE_LABELS[label_value] if label_value else None
+
+    if normalized_label is not None and part in {"release", "post"}:
+        err_console.print(f"[red]Cannot use a pre-release label with bump {part}.[/red]")
+        ctx.exit(1)
+        return
 
     try:
         if part == "major":
@@ -342,6 +357,8 @@ def bump(ctx: click.Context, part: str, pre_label: str | None, dry_run: bool, ye
             new = consensus.bump_pre(label=normalized_label)
         elif part == "release":
             new = consensus.bump_release()
+        elif part == "post":
+            new = consensus.bump_post()
         else:
             err_console.print(f"[red]Unknown part: {part}[/red]")
             ctx.exit(1)

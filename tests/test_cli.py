@@ -1,7 +1,6 @@
-import json
 import pytest
-from pathlib import Path
 from click.testing import CliRunner
+
 from vrzn.cli import cli
 
 
@@ -103,12 +102,74 @@ class TestBump:
         assert result.exit_code == 0
         assert 'version = "1.2.4rc1"' in (project / "pyproject.toml").read_text(encoding="utf-8")
 
+    def test_bump_patch_with_pre_dev(self, runner, project):
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "--yes", "bump", "patch", "--pre", "dev"])
+        assert result.exit_code == 0
+        assert 'version = "1.2.4.dev1"' in (project / "pyproject.toml").read_text(encoding="utf-8")
+
+    @pytest.mark.parametrize(
+        ("part", "label", "expected"),
+        [
+            ("major", "a", "2.0.0a1"),
+            ("major", "b", "2.0.0b1"),
+            ("major", "dev", "2.0.0.dev1"),
+            ("major", "rc", "2.0.0rc1"),
+            ("minor", "a", "1.3.0a1"),
+            ("minor", "b", "1.3.0b1"),
+            ("minor", "dev", "1.3.0.dev1"),
+            ("minor", "rc", "1.3.0rc1"),
+            ("patch", "a", "1.2.4a1"),
+            ("patch", "b", "1.2.4b1"),
+            ("patch", "dev", "1.2.4.dev1"),
+            ("patch", "rc", "1.2.4rc1"),
+        ],
+    )
+    def test_bump_release_to_next_part_prerelease_with_positional_label(
+        self, runner, project, part, label, expected,
+    ):
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "--yes", "bump", part, label])
+        assert result.exit_code == 0
+        assert f'version = "{expected}"' in (project / "pyproject.toml").read_text(encoding="utf-8")
+
+    def test_bump_post(self, runner, project):
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "--yes", "bump", "post"])
+        assert result.exit_code == 0
+        assert 'version = "1.2.3.post1"' in (project / "pyproject.toml").read_text(encoding="utf-8")
+
+    def test_bump_post_increments(self, runner, project):
+        (project / "pyproject.toml").write_text('version = "1.2.3.post1"\n', encoding="utf-8")
+        (project / "src" / "__init__.py").write_text('__version__ = "1.2.3.post1"\n', encoding="utf-8")
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "--yes", "bump", "post"])
+        assert result.exit_code == 0
+        assert 'version = "1.2.3.post2"' in (project / "pyproject.toml").read_text(encoding="utf-8")
+
+    @pytest.mark.parametrize("part", ["release", "post"])
+    def test_bump_rejects_label_for_non_prerelease_target(self, runner, project, part):
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "--yes", "bump", part, "rc"])
+        assert result.exit_code == 1
+        assert 'version = "1.2.3"' in (project / "pyproject.toml").read_text(encoding="utf-8")
+
+    def test_bump_rejects_positional_label_and_pre_option_together(self, runner, project):
+        result = runner.invoke(
+            cli,
+            ["--config", str(project / "vrzn.toml"), "--yes", "bump", "patch", "rc", "--pre", "a"],
+        )
+        assert result.exit_code == 1
+        assert 'version = "1.2.3"' in (project / "pyproject.toml").read_text(encoding="utf-8")
+
     def test_bump_pre_increments(self, runner, project):
         (project / "pyproject.toml").write_text('version = "1.0.0rc1"\n', encoding="utf-8")
         (project / "src" / "__init__.py").write_text('__version__ = "1.0.0rc1"\n', encoding="utf-8")
         result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "--yes", "bump", "pre"])
         assert result.exit_code == 0
         assert 'version = "1.0.0rc2"' in (project / "pyproject.toml").read_text(encoding="utf-8")
+
+    def test_bump_pre_increments_dev(self, runner, project):
+        (project / "pyproject.toml").write_text('version = "1.0.0.dev1"\n', encoding="utf-8")
+        (project / "src" / "__init__.py").write_text('__version__ = "1.0.0.dev1"\n', encoding="utf-8")
+        result = runner.invoke(cli, ["--config", str(project / "vrzn.toml"), "--yes", "bump", "pre"])
+        assert result.exit_code == 0
+        assert 'version = "1.0.0.dev2"' in (project / "pyproject.toml").read_text(encoding="utf-8")
 
     def test_bump_release_finalizes(self, runner, project):
         (project / "pyproject.toml").write_text('version = "1.0.0rc1"\n', encoding="utf-8")

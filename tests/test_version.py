@@ -1,4 +1,5 @@
 import pytest
+
 from vrzn.version import Version, parse_version
 
 
@@ -208,6 +209,10 @@ class TestVersionBump:
         v = Version(1, 0, 0)
         assert v.bump_patch(pre_label="rc") == Version(1, 0, 1, pre=("rc", 1))
 
+    def test_bump_patch_with_dev(self):
+        v = Version(1, 2, 3)
+        assert v.bump_patch(pre_label="dev") == Version(1, 2, 4, dev=1)
+
     def test_bump_minor_with_pre(self):
         v = Version(1, 0, 0)
         assert v.bump_minor(pre_label="a") == Version(1, 1, 0, pre=("a", 1))
@@ -234,6 +239,10 @@ class TestVersionBump:
         v = Version(1, 0, 1, pre=("rc", 1))
         assert v.bump_pre() == Version(1, 0, 1, pre=("rc", 2))
 
+    def test_bump_pre_increments_dev(self):
+        v = Version(1, 0, 1, dev=1)
+        assert v.bump_pre() == Version(1, 0, 1, dev=2)
+
     def test_bump_pre_no_active_raises(self):
         v = Version(1, 0, 0)
         with pytest.raises(ValueError, match="no active pre-release"):
@@ -256,6 +265,10 @@ class TestVersionBump:
         v = Version(1, 0, 1, pre=("a", 3))
         assert v.bump_pre(label="b") == Version(1, 0, 1, pre=("b", 1))
 
+    def test_bump_pre_promote_from_dev_to_alpha(self):
+        v = Version(1, 0, 1, dev=2)
+        assert v.bump_pre(label="a") == Version(1, 0, 1, pre=("a", 1))
+
     # --- bump release ---
 
     def test_bump_release(self):
@@ -275,3 +288,13 @@ class TestVersionBump:
         v = Version(1, 0, 0, post=1)
         with pytest.raises(ValueError, match="already a final release"):
             v.bump_release()
+
+    # --- bump post ---
+
+    def test_bump_post_from_release(self):
+        v = Version(1, 2, 3)
+        assert v.bump_post() == Version(1, 2, 3, post=1)
+
+    def test_bump_post_increments_existing_post(self):
+        v = Version(1, 2, 3, post=1)
+        assert v.bump_post() == Version(1, 2, 3, post=2)

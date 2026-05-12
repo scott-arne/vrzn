@@ -1,7 +1,8 @@
 import json
+
 import pytest
-from pathlib import Path
-from vrzn.config import find_config, load_config, validate_config, ConfigError
+
+from vrzn.config import ConfigError, find_config, load_config, validate_config
 
 
 class TestFindConfig:
